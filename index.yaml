@@ -1,0 +1,24 @@
+apiVersion: v1
+entries:
+  k8s-app-chart:
+  - apiVersion: v2
+    appVersion: "1.0"
+    created: "2026-03-31T19:05:24.843402+05:00"
+    description: A generic, production-ready Helm chart for deploying frontend and
+      backend services on Kubernetes
+    digest: a8388ad1f8768445ce5af31c0a08889efdd6664d3a9c1163ab205536888a48ba
+    keywords:
+    - microservice
+    - nodejs
+    - backend
+    - frontend
+    - kubernetes
+    - gke
+    maintainers:
+    - name: Muhammad Zeeshan
+    name: k8s-app-chart
+    type: application
+    urls:
+    - https://github.com/zeeemughal/k8s-app-chart/releases/download/k8s-app-chart-1.0.0/k8s-app-chart-1.0.0.tgz
+    version: 1.0.0
+generated: "2026-03-31T19:05:24.842303+05:00"
