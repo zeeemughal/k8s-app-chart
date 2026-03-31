@@ -1,0 +1,83 @@
+# k8s-app-chart CI/CD Agent Guide
+
+## Repository Purpose
+Generic, production-ready Helm chart for deploying frontend and backend services on Kubernetes. Supports external secrets, HPA, ingress, configmaps, and service accounts.
+
+## Repository Structure
+```
+k8s-app-chart/
+├── charts/
+│   └── k8s-app-chart/        # Helm chart source
+│       ├── Chart.yaml         # Chart metadata and version (bump this to release)
+│       ├── values.yaml        # Default values
+│       ├── .helmignore
+│       └── templates/
+│           ├── _helpers.tpl
+│           ├── deployment.yaml
+│           ├── service.yaml
+│           ├── ingress.yaml
+│           ├── configmap.yaml
+│           ├── secret.yaml
+│           ├── externalsecret.yaml
+│           ├── hpa.yaml
+│           └── serviceaccount.yaml
+├── .github/
+│   └── workflows/
+│       └── release.yml        # chart-releaser GitHub Action
+├── .agents                    # this file
+├── .gitignore
+├── README.md
+└── DEPLOYMENT_GUIDE.md
+```
+
+## CI/CD Pipeline
+
+### How Releases Work
+1. Developer bumps `version` in `charts/k8s-app-chart/Chart.yaml` (SemVer)
+2. Push to `main` branch
+3. GitHub Action (`release.yml`) triggers on changes to `charts/**`
+4. `helm/chart-releaser-action` detects the version bump, packages the chart
+5. GitHub Release is created with the `.tgz` asset
+6. `index.yaml` is updated on the `gh-pages` branch
+7. Chart is available via Helm repo at `https://zeeemughal.github.io/k8s-app-chart`
+
+### Versioning Rules (SemVer)
+| Change Type     | Version Bump | Example         |
+|-----------------|--------------|-----------------|
+| Bug fix         | Patch        | 1.0.0 → 1.0.1  |
+| New feature     | Minor        | 1.0.0 → 1.1.0  |
+| Breaking change | Major        | 1.0.0 → 2.0.0  |
+
+### To Release a New Version
+1. Edit `charts/k8s-app-chart/Chart.yaml` — bump the `version` field
+2. Commit: `git commit -m "chore: bump chart version to X.Y.Z"`
+3. Push to `main` — the Action handles the rest
+
+### Helm Repo
+```bash
+# Add repo
+helm repo add zeeemughal https://zeeemughal.github.io/k8s-app-chart
+
+# Install
+helm install <release-name> zeeemughal/k8s-app-chart --version <X.Y.Z> -f values.yaml
+
+# Upgrade
+helm upgrade <release-name> zeeemughal/k8s-app-chart --version <X.Y.Z> -f values.yaml
+
+# List versions
+helm search repo zeeemughal/k8s-app-chart --versions
+```
+
+## GitHub Actions Workflow
+- **File:** `.github/workflows/release.yml`
+- **Trigger:** Push to `main` with changes under `charts/**`
+- **Action:** `helm/chart-releaser-action@v1.6.0`
+- **Pages branch:** `gh-pages`
+- **Token:** Uses `GITHUB_TOKEN` (no extra secrets needed)
+
+## Key Rules for Agents
+- Never commit directly to `gh-pages` — it is managed by the chart-releaser Action
+- Always bump `version` in `Chart.yaml` before expecting a new release
+- Do not modify `appVersion` unless the application itself has a new version
+- Keep chart name as `k8s-app-chart` — changing it breaks existing consumers
+- Test chart rendering locally before pushing: `helm template . -f charts/k8s-app-chart/values.yaml`

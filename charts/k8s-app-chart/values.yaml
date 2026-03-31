@@ -1,0 +1,388 @@
+# Translation Service - Backend API
+# Example values for deploying My Backend Service on Kubernetes
+# This demonstrates the recommended production configuration with External Secrets
+
+# Global settings
+global:
+  environment: develop
+  projectId: my-project-develop
+
+# Service identification
+serviceName: my-service
+serviceType: backend
+
+# Replica count (overridden by HPA when autoscaling is enabled)
+replicaCount: 1
+
+# Container image configuration
+image:
+  repository: us.gcr.io/my-project-develop/develop-my-service
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+# No image pull secrets needed for GCR with Workload Identity
+imagePullSecrets: []
+
+# GKE Workload Identity - binds Kubernetes SA to GCP SA
+# Uses the SAME GCP Service Account as Cloud Run (shared between both platforms)
+# Cloud Run and Kubernetes can share the same GCP SA safely
+serviceAccount:
+  create: true  # Creates Kubernetes SA (inside cluster)
+  annotations:
+    # Full GCP service account email is REQUIRED (including @project-id.iam.gserviceaccount.com)
+    # This references the GCP SA (must already exist or be created by Terraform/gcloud)
+    iam.gke.io/gcp-service-account: develop-my-service-sa@my-project-develop.iam.gserviceaccount.com
+  name: ""  # Leave empty to auto-generate from release name
+
+# Pod annotations (optional - for Prometheus scraping, etc.)
+podAnnotations: {}
+  # prometheus.io/scrape: "true"
+  # prometheus.io/port: "8080"
+  # prometheus.io/path: "/metrics"
+
+# Pod-level security context
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+# Container-level security context
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: false
+
+# Container configuration
+container:
+  port: 80
+  protocol: TCP
+
+# Startup probe - matching Cloud Run configuration (TCP probe)
+# Cloud Run config: TCP check on port 80, max 20 minutes (30 * 40s = 1200s)
+startupProbe:
+  enabled: true
+  tcpSocket:
+    port: http
+  initialDelaySeconds: 0
+  periodSeconds: 40
+  timeoutSeconds: 30
+  failureThreshold: 30
+  successThreshold: 1
+
+# Liveness probe - restarts container if unhealthy
+livenessProbe:
+  enabled: true
+  httpGet:
+    path: /
+    port: http
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+  successThreshold: 1
+
+# Readiness probe - removes from service if not ready
+readinessProbe:
+  enabled: true
+  httpGet:
+    path: /
+    port: http
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+  successThreshold: 1
+
+# Resource limits matching Cloud Run configuration
+# Cloud Run: cpu=1000m, memory=2Gi
+resources:
+  limits:
+    cpu: 1000m
+    memory: 2Gi
+  requests:
+    cpu: 100m
+    memory: 512Mi
+
+# Horizontal Pod Autoscaler
+# Cloud Run: min_instances=0, max_instances=1
+autoscaling:
+  enabled: true
+  minReplicas: 1  # K8s doesn't scale to zero by default (use min=1 instead of Cloud Run's 0)
+  maxReplicas: 1  # Match Cloud Run max_instances=1
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+
+# Kubernetes Service
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: http
+  annotations: {}
+
+# Nginx Ingress configuration
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    # TLS certificate management
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+
+    # SSL/TLS settings
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+
+    # Rate limiting (adjust as needed)
+    nginx.ingress.kubernetes.io/limit-rps: "100"
+
+    # Timeout settings for translation (may take longer)
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+
+    # Request body size (for file uploads)
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+
+    # Backend protocol
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+
+  hosts:
+    - host: my-service-k8s.develop.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: my-service-k8s-develop-example-tls
+      hosts:
+        - my-service-k8s.develop.example.com
+
+# NOTE: Certificate resource is NOT needed!
+# Cert-manager automatically creates the certificate from the Ingress annotation:
+# cert-manager.io/cluster-issuer: letsencrypt-prod
+# The TLS secret will be auto-created with the name specified in ingress.tls.secretName
+
+# Environment variables (non-sensitive configuration)
+# These are stored in a ConfigMap
+env:
+  # Database configuration (using Cloud SQL Proxy)
+  DB_HOST: "127.0.0.1"  # Cloud SQL Proxy localhost
+  DB_PORT: "5432"
+  DB_NAME: "develop_my_service_db"
+  DB_USER: "develop_my_service_db_admin"
+  DB_SSL_MODE: "disable"
+
+  # Database connection pool settings
+  DB_POOL_SIZE: "10"
+  DB_IDLE_IN_TRANSACTION: "100000"
+  DB_ACQUIRE: "30000"
+  DB_IDLE_TIME: "15000"
+  MAX_CONNECTIONS: "10"
+
+  # Application settings
+  NODE_ENV: "development"
+  LOG_LEVEL: "info"
+  METRICS_ENABLED: "true"
+  TRACING_ENABLED: "false"
+  TIMEOUT_SECONDS: "30"
+  PORT: "80"  # Cloud Run standard variable for binding port
+  APP_HOST: "0.0.0.0"  # Listen on all interfaces (required for K8s probes)
+  APP_PORT: "80"
+
+  # GCP configuration
+  PROJECT_ID: "my-project-develop"
+
+  # Redis configuration (from Cloud Run config)
+  REDIS_HOST: "10.0.1.5"  # Update with actual Redis host from module.redis.host
+  REDIS_PORT: "6379"
+
+  # Pub/Sub configuration
+  BROKER_TYPE: "GCP_PUBSUB"
+
+  # Domain configuration
+  BASE_DOMAIN: "develop.example.com"
+
+  # HTTP timeout
+  HTTP_TIMEOUT_MS: "100000"
+
+# ConfigMap configuration
+envFromConfigMap:
+  enabled: true
+  existingConfigMap: ""  # Leave empty to create from env above
+
+# Secret configuration
+# DO NOT use this in production - use externalSecrets instead
+envFromSecret:
+  enabled: false  # Disabled - using External Secrets Operator
+  existingSecret: ""
+
+# Basic Kubernetes secrets (NOT RECOMMENDED for production)
+# These are empty because we're using External Secrets Operator
+secrets: {}
+
+# External Secrets Operator configuration
+# This syncs secrets from GCP Secret Manager to Kubernetes
+externalSecrets:
+  enabled: true
+
+  # Reference to the cluster-wide SecretStore
+  # This should already be configured by platform team
+  secretStoreName: gcp-secrets-manager
+  secretStoreKind: ClusterSecretStore
+
+  # How often to refresh secrets from GCP Secret Manager
+  refreshInterval: 1h
+
+  # Secrets to sync from GCP Secret Manager
+  # secretKey: Key in the Kubernetes secret (environment variable name)
+  # remoteKey: Secret name in GCP Secret Manager
+  secrets:
+    # Database password (from Cloud SQL module)
+    - secretKey: DB_PASS
+      remoteKey: develop-my-service-postgres-develop_my_service_db_admin-password
+
+    # Firebase Service Account
+    - secretKey: FIREBASE_SERVICE_ACCOUNT
+      remoteKey: FIREBASE_SERVICE_ACCOUNT
+
+    # Redis password
+    - secretKey: REDIS_PASSWORD
+      remoteKey: REDIS_PASSWORD
+
+    # Swagger Basic Auth
+    - secretKey: BASIC_AUTH_USER_FOR_SWAGGER
+      remoteKey: BASIC_AUTH_USER_FOR_SWAGGER
+
+    - secretKey: BASIC_AUTH_PASS_FOR_SWAGGER
+      remoteKey: BASIC_AUTH_PASS_FOR_SWAGGER
+
+    # Monitoring & Observability
+    - secretKey: NEW_RELIC_INSERT_KEY
+      remoteKey: NEW_RELIC_INSERT_KEY
+
+    - secretKey: NEW_RELIC_LICENSE_KEY
+      remoteKey: NEW_RELIC_LICENSE_KEY
+
+  # Optional: Template for constructing derived values
+  # Example: Build connection strings from individual secrets
+  template: {}
+    # Example:
+    # DATABASE_URL: "postgresql://{{ .DB_USER }}:{{ .DB_PASS }}@{{ .DB_HOST }}:5432/{{ .DB_NAME }}"
+
+# Cloud SQL Proxy sidecar
+# Required for connecting to Cloud SQL from GKE
+cloudSqlProxy:
+  enabled: true
+  image:
+    repository: gcr.io/cloud-sql-connectors/cloud-sql-proxy
+    tag: "2.8.0"
+  # Cloud SQL instance connection name (project:region:instance)
+  instanceConnectionName: "my-project-develop:us-central1:develop-my-service-postgres"
+  port: 5432
+  resources:
+    requests:
+      memory: 64Mi
+      cpu: 50m
+    limits:
+      memory: 128Mi
+      cpu: 100m
+
+# Node selector for pod placement
+nodeSelector: {}
+  # Example: Run on specific node pool
+  # cloud.google.com/gke-nodepool: backend-pool
+
+# Tolerations for node taints
+tolerations: []
+  # Example:
+  # - key: "workload"
+  #   operator: "Equal"
+  #   value: "backend"
+  #   effect: "NoSchedule"
+
+# Pod affinity/anti-affinity rules
+affinity: {}
+  # Example: Spread pods across nodes
+  # podAntiAffinity:
+  #   preferredDuringSchedulingIgnoredDuringExecution:
+  #     - weight: 100
+  #       podAffinityTerm:
+  #         labelSelector:
+  #           matchLabels:
+  #             app.kubernetes.io/name: generic-service
+  #             app.kubernetes.io/instance: backend-translation
+  #         topologyKey: kubernetes.io/hostname
+
+# Pod Disruption Budget for high availability
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Network Policy (optional - restrict network access)
+networkPolicy:
+  enabled: false
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            name: ingress-nginx
+      ports:
+      - protocol: TCP
+        port: 80
+  egress:
+    - to:
+      - namespaceSelector: {}
+      ports:
+      - protocol: TCP
+        port: 443
+      - protocol: TCP
+        port: 5432
+      - protocol: TCP
+        port: 6379
+
+# Additional labels to add to all resources
+labels:
+  app: my-service
+  tier: backend
+  team: platform
+  cost-center: engineering
+
+# Additional volumes (optional)
+volumes: []
+  # Example: Mount GCP service account key
+  # - name: gcp-sa-key
+  #   secret:
+  #     secretName: gcp-service-account
+
+# Additional volume mounts (optional)
+volumeMounts: []
+  # Example:
+  # - name: gcp-sa-key
+  #   mountPath: /var/secrets/google
+  #   readOnly: true
+
+# Lifecycle hooks (optional)
+lifecycle: {}
+  # Example: Graceful shutdown
+  # preStop:
+  #   exec:
+  #     command: ["/bin/sh", "-c", "sleep 15"]
+
+# Init containers (optional)
+initContainers: []
+  # Example: Wait for database to be ready
+  # - name: wait-for-db
+  #   image: busybox:1.28
+  #   command: ['sh', '-c', 'until nc -zv 127.0.0.1 5432; do echo waiting for db; sleep 2; done']
+
+# Sidecars (optional)
+sidecars: []
+  # Example: Log forwarder
+  # - name: fluent-bit
+  #   image: fluent/fluent-bit:2.0
+  #   volumeMounts:
+  #     - name: varlog
+  #       mountPath: /var/log

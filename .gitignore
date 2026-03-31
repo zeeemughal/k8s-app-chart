@@ -1,0 +1,21 @@
+# Helm
+*.tgz
+charts/*/charts/
+charts/*/tmpcharts/
+
+# Local values overrides
+*values.local.yaml
+*values.override.yaml
+*secrets.yaml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Rendered templates (from helm template)
+rendered/
+output/
