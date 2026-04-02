@@ -28,10 +28,9 @@ imagePullSecrets: []
 # Cloud Run and Kubernetes can share the same GCP SA safely
 serviceAccount:
   create: true  # Creates Kubernetes SA (inside cluster)
-  annotations:
-    # Full GCP service account email is REQUIRED (including @project-id.iam.gserviceaccount.com)
-    # This references the GCP SA (must already exist or be created by Terraform/gcloud)
-    iam.gke.io/gcp-service-account: develop-my-service-sa@my-project-develop.iam.gserviceaccount.com
+  annotations: {}
+    # Example: Full GCP service account email is REQUIRED (including @project-id.iam.gserviceaccount.com)
+    # iam.gke.io/gcp-service-account: develop-my-service-sa@my-project-develop.iam.gserviceaccount.com
   name: ""  # Leave empty to auto-generate from release name
 
 # Pod annotations (optional - for Prometheus scraping, etc.)
@@ -147,15 +146,15 @@ ingress:
     # Backend protocol
     nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
 
-  hosts:
-    - host: my-service-k8s.develop.example.com
-      paths:
-        - path: /
-          pathType: Prefix
-  tls:
-    - secretName: my-service-k8s-develop-example-tls
-      hosts:
-        - my-service-k8s.develop.example.com
+  hosts: []
+    # - host: my-service-k8s.develop.example.com
+    #   paths:
+    #     - path: /
+    #       pathType: Prefix
+  tls: []
+    # - secretName: my-service-k8s-develop-example-tls
+    #   hosts:
+    #     - my-service-k8s.develop.example.com
 
 # NOTE: Certificate resource is NOT needed!
 # Cert-manager automatically creates the certificate from the Ingress annotation:
@@ -164,46 +163,9 @@ ingress:
 
 # Environment variables (non-sensitive configuration)
 # These are stored in a ConfigMap
-env:
-  # Database configuration (using Cloud SQL Proxy)
-  DB_HOST: "127.0.0.1"  # Cloud SQL Proxy localhost
-  DB_PORT: "5432"
-  DB_NAME: "develop_my_service_db"
-  DB_USER: "develop_my_service_db_admin"
-  DB_SSL_MODE: "disable"
-
-  # Database connection pool settings
-  DB_POOL_SIZE: "10"
-  DB_IDLE_IN_TRANSACTION: "100000"
-  DB_ACQUIRE: "30000"
-  DB_IDLE_TIME: "15000"
-  MAX_CONNECTIONS: "10"
-
-  # Application settings
-  NODE_ENV: "development"
-  LOG_LEVEL: "info"
-  METRICS_ENABLED: "true"
-  TRACING_ENABLED: "false"
-  TIMEOUT_SECONDS: "30"
-  PORT: "80"  # Cloud Run standard variable for binding port
-  APP_HOST: "0.0.0.0"  # Listen on all interfaces (required for K8s probes)
-  APP_PORT: "80"
-
-  # GCP configuration
-  PROJECT_ID: "my-project-develop"
-
-  # Redis configuration (from Cloud Run config)
-  REDIS_HOST: "10.0.1.5"  # Update with actual Redis host from module.redis.host
-  REDIS_PORT: "6379"
-
-  # Pub/Sub configuration
-  BROKER_TYPE: "GCP_PUBSUB"
-
-  # Domain configuration
-  BASE_DOMAIN: "develop.example.com"
-
-  # HTTP timeout
-  HTTP_TIMEOUT_MS: "100000"
+# NOTE: Provide ALL env vars your service needs - defaults are intentionally empty
+# to avoid leaking placeholder values into production
+env: {}
 
 # ConfigMap configuration
 envFromConfigMap:
@@ -236,32 +198,7 @@ externalSecrets:
   # Secrets to sync from GCP Secret Manager
   # secretKey: Key in the Kubernetes secret (environment variable name)
   # remoteKey: Secret name in GCP Secret Manager
-  secrets:
-    # Database password (from Cloud SQL module)
-    - secretKey: DB_PASS
-      remoteKey: develop-my-service-postgres-develop_my_service_db_admin-password
-
-    # Firebase Service Account
-    - secretKey: FIREBASE_SERVICE_ACCOUNT
-      remoteKey: FIREBASE_SERVICE_ACCOUNT
-
-    # Redis password
-    - secretKey: REDIS_PASSWORD
-      remoteKey: REDIS_PASSWORD
-
-    # Swagger Basic Auth
-    - secretKey: BASIC_AUTH_USER_FOR_SWAGGER
-      remoteKey: BASIC_AUTH_USER_FOR_SWAGGER
-
-    - secretKey: BASIC_AUTH_PASS_FOR_SWAGGER
-      remoteKey: BASIC_AUTH_PASS_FOR_SWAGGER
-
-    # Monitoring & Observability
-    - secretKey: NEW_RELIC_INSERT_KEY
-      remoteKey: NEW_RELIC_INSERT_KEY
-
-    - secretKey: NEW_RELIC_LICENSE_KEY
-      remoteKey: NEW_RELIC_LICENSE_KEY
+  secrets: []
 
   # Optional: Template for constructing derived values
   # Example: Build connection strings from individual secrets
@@ -277,7 +214,7 @@ cloudSqlProxy:
     repository: gcr.io/cloud-sql-connectors/cloud-sql-proxy
     tag: "2.8.0"
   # Cloud SQL instance connection name (project:region:instance)
-  instanceConnectionName: "my-project-develop:us-central1:develop-my-service-postgres"
+  instanceConnectionName: ""
   port: 5432
   resources:
     requests:
@@ -344,11 +281,11 @@ networkPolicy:
         port: 6379
 
 # Additional labels to add to all resources
-labels:
-  app: my-service
-  tier: backend
-  team: platform
-  cost-center: engineering
+labels: {}
+  # app: my-service
+  # tier: backend
+  # team: platform
+  # cost-center: engineering
 
 # Additional volumes (optional)
 volumes: []
